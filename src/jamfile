@@ -149,7 +149,8 @@ rule deploy-jamfile ( dir )
         }
         obj "$(i:B).obj"
           : "$(i)"
-          : <jamming-source-impl>"$(i)"
+          : $(INTRO_COMPILE_PROPERTIES)
+            <jamming-source-impl>"$(i)"
             <conditional>@$(.top-mod).obj-requirements-conditional
           : # No default-build.
           : <conditional>@$(.top-mod).obj-usage-requirements-conditional
