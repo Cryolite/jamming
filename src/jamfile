@@ -1,0 +1,176 @@
+project jamming/src ;
+
+import errors ;
+import feature ;
+import modules ;
+import path ;
+import project ;
+import regex ;
+import [ project.module-name "$(JAMMING_ROOT)/ext/boost" ]
+  : get-boost-dependencies
+  ;
+import "$(JAMMING_ROOT)/common"
+  : get-included-files
+  ;
+
+
+local .here = [ regex.match "Jamfile<(.*)>" : "$(__name__)" : 1 ] ;
+if ! "$(.here)" {
+  errors.error "an internal error." ;
+}
+.here = [ path.make "$(.here)" ] ;
+
+{
+  local src-top-siblings ;
+  for local i in [ path.glob "$(.here)" : * ] {
+    local path-native = [ path.native "$(i)" ] ;
+    if [ SHELL "test -d \"$(path-native)\" && echo -n 'x'" ] = "x" {
+      src-top-siblings += [ path.basename "$(i)" ] ;
+    }
+  }
+  if $(src-top-siblings) {
+    constant JAMMING_SRC_TOP_SIBLINGS : $(src-top-siblings) ;
+  }
+}
+
+rule get-src-dependencies ( included-files * : properties * : excluded-sibling-top ? )
+{
+  local results ;
+  for local included-file in $(included-files) {
+    for local i in $(JAMMING_SRC_TOP_SIBLINGS) {
+      if [ regex.match "(jamming/$(i)/)" : "$(included-file)" : 1 ] {
+        if "$(i)" != "$(excluded-sibling-top)" {
+          results += "$(i)" ;
+        }
+      }
+    }
+  }
+  return $(results) ;
+}
+
+
+rule obj-requirements-conditional ( properties * )
+{
+  local src = [ feature.get-values <jamming-source-impl> : $(properties) ] ;
+  if ! "$(src[1])" {
+    errors.error "an internal error." ;
+  }
+  if "$(src[2])" {
+    errors.error "an internal error." ;
+  }
+  src = "$(src[1])" ;
+  if ! [ path.exists "$(src)" ] {
+    errors.error "an internal error." ;
+  }
+  local sibling-top = [ regex.match "/jamming/src/([^/]+)/" : "$(src)" : 1 ] ;
+  if ! "$(sibling-top)" {
+    errors.error "an internal error." ;
+  }
+  local included-files = [ get-included-files $(properties) : "$(JAMMING_ROOT)" ] ;
+  local boost-deps = [ get-boost-dependencies $(included-files) : $(properties) ] ;
+  local src-deps = [ get-src-dependencies $(included-files) : $(properties) : "$(sibling-top)" ] ;
+  local results ;
+  results += "<source>/jamming/ext/boost//$(boost-deps)_compile" ;
+  results += "<source>/jamming/src/$(src-deps)//compile" ;
+  return $(results) ;
+}
+
+rule obj-usage-requirements-conditional ( properties * )
+{
+  local src = [ feature.get-values <jamming-source-impl> : $(properties) ] ;
+  if ! "$(src[1])" {
+    errors.error "an internal error." ;
+  }
+  if "$(src[2])" {
+    errors.error "an internal error." ;
+  }
+  src = "$(src[1])" ;
+  if ! [ path.exists "$(src)" ] {
+    errors.error "an internal error." ;
+  }
+  local sibling-top = [ regex.match "/jamming/src/([^/]+)/" : "$(src)" : 1 ] ;
+  if ! "$(sibling-top)" {
+    errors.error "an internal error." ;
+  }
+  local included-files = [ get-included-files $(properties) : "$(JAMMING_ROOT)" ] ;
+  local boost-deps = [ get-boost-dependencies $(included-files) : $(properties) ] ;
+  local src-deps = [ get-src-dependencies $(included-files) : $(properties) : "$(sibling-top)" ] ;
+  local results ;
+  results += "<library>/jamming/ext/boost//$(boost-deps)_libs" ;
+  results += "<library>/jamming/src/$(src-deps)//objs" ;
+  return $(results) ;
+}
+
+rule deploy-jamfile ( dir )
+{
+  if [ path.exists "$(dir)/jamfile" ]
+       || [ path.exists "$(dir)/Jamfile" ]
+       || [ path.exists "$(dir)/jamroot" ]
+       || [ path.exists "$(dir)/Jamroot" ]
+       || [ path.exists "$(dir)/project-root.jam" ]
+  {
+    # Skip if there exists an explicit jamfile.
+  }
+  else {
+    local mod = [ project.module-name "$(dir)" ] ;
+    project.push-current "$(mod)" ;
+    project.act-as-jamfile "$(mod)" : "$(dir)" ;
+    modules.poke "$(mod)" : .here : "$(dir)" ;
+    module "$(mod)" {
+      import errors ;
+      import feature ;
+      import path ;
+      import project ;
+      import [ project.module-name "$(JAMMING_ROOT)/src" ]
+        : deploy-jamfile
+        ;
+
+      local .direct-subdirs ;
+      for local i in [ path.glob "$(.here)" : * ] {
+        local path-native = [ path.native "$(i)" ] ;
+        if [ SHELL "test -d \"$(path-native)\" && echo -n 'x'" ] = "x" {
+          deploy-jamfile "$(i)" ;
+          .direct-subdirs += "$(i)" ;
+        }
+      }
+
+      alias "compile"
+        ;
+
+      alias "link"
+        ;
+
+      local .top-mod = [ project.module-name "$(JAMMING_ROOT)/src" ] ;
+      local .srcs = [ path.glob "$(.here)" : *.cpp ] ;
+      local .objs ;
+      for local i in $(.srcs) {
+        if ! "$(i)" in [ feature.values <jamming-source-impl> ] {
+          feature.extend <jamming-source-impl> : "$(i)" ;
+        }
+        obj "$(i:B).obj"
+          : "$(i)"
+          : <jamming-source-impl>"$(i)"
+            <conditional>@$(.top-mod).obj-requirements-conditional
+          : # No default-build.
+          : <conditional>@$(.top-mod).obj-usage-requirements-conditional
+          ;
+        explicit "$(i:B).obj" ;
+        .objs += "$(i:B).obj" ;
+      }
+
+      alias objs
+        : # No source.
+        : # No requirement.
+        : # No default-build.
+        : <library>$(.direct-subdirs)//objs
+          <library>$(.objs)
+        ;
+    }
+    project.pop-current ;
+  }
+}
+
+for local i in $(JAMMING_SRC_TOP_SIBLINGS) {
+  deploy-jamfile "$(.here)/$(i)" ;
+  use-project "/jamming/src/$(i)" : "$(.here)/$(i)" ;
+}

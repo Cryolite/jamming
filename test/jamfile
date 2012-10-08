@@ -1,0 +1,245 @@
+project jamming/test ;
+
+import modules ;
+import path ;
+import project ;
+import regex ;
+import "$(JAMMING_ROOT)/common"
+  : get-included-files
+  ;
+import [ project.module-name "$(JAMMING_ROOT)/ext/boost" ]
+  : get-boost-dependencies
+  ;
+import [ project.module-name "$(JAMMING_ROOT)/src" ]
+  : get-src-dependencies
+  ;
+
+
+local .here = [ regex.match "Jamfile<(.*)>" : "$(__name__)" : 1 ] ;
+if ! "$(.here)" {
+  errors.error "an internal error." ;
+}
+.here = [ path.make "$(.here)" ] ;
+
+
+rule compile-requirements-conditional ( properties * )
+{
+  local included-files = [ get-included-files $(properties) : "$(JAMMING_ROOT)" ] ;
+  local boost-deps = [ get-boost-dependencies $(included-files) : $(properties) ] ;
+  local src-deps = [ get-src-dependencies $(included-files) : $(properties) ] ;
+  local results ;
+  results += "<source>/jamming/ext/boost//$(boost-deps)_compile" ;
+  results += "<source>/jamming/src/$(src-deps)//compile" ;
+  return $(results) ;
+}
+
+rule compile-usage-requirements-conditional ( properties * )
+{
+  local included-files = [ get-included-files $(properties) : "$(JAMMING_ROOT)" ] ;
+  local boost-deps = [ get-boost-dependencies $(included-files) : $(properties) ] ;
+  local src-deps = [ get-src-dependencies $(included-files) : $(properties) ] ;
+  local results ;
+  results += "<library>/jamming/ext/boost//$(boost-deps)_libs" ;
+  results += "<library>/jamming/src/$(src-deps)//objs" ;
+  return $(results) ;
+}
+
+rule deploy-jamfile ( dir )
+{
+  if [ path.exists "$(dir)/jamfile" ]
+       || [ path.exists "$(dir)/Jamfile" ]
+       || [ path.exists "$(dir)/jamroot" ]
+       || [ path.exists "$(dir)/Jamroot" ]
+       || [ path.exists "$(dir)/project-root.jam" ]
+  {
+    # Skip if there exists an explicit jamfile.
+  }
+  else {
+    local mod = [ project.module-name "$(dir)" ] ;
+    project.push-current "$(mod)" ;
+    project.act-as-jamfile "$(mod)" : "$(dir)" ;
+    modules.poke "$(mod)" : .here : "$(dir)" ;
+    module "$(mod)" {
+      import feature ;
+      import path ;
+      import project ;
+      import site-config ;
+      import [ project.module-name "$(JAMMING_ROOT)/test" ]
+        : deploy-jamfile
+        ;
+
+      local .direct-subdirs ;
+      for local i in [ path.glob "$(.here)" : * ] {
+        local ph-native = [ path.native "$(i)" ] ;
+        if [ SHELL "test -d \"$(ph-native)\" && echo -n 'x'" ] = "x" {
+          deploy-jamfile "$(i)" ;
+          .direct-subdirs += "$(i)" ;
+        }
+      }
+
+      local .top-mod = [ project.module-name "$(JAMMING_ROOT)/test" ] ;
+
+      local .tests ;
+
+      for local i in [ path.glob "$(.here)" : *_compile.cpp ] {
+        if ! "$(i)" in [ feature.values <jamming-source-impl> ] {
+          feature.extend <jamming-source-impl> : "$(i)" ;
+        }
+
+        compile "$(i)"
+          : $(INTRO_COMPILE_PROPERTIES)
+            <jamming-source-impl>"$(i)"
+            <conditional>@"$(.top-mod).compile-requirements-conditional"
+          : "$(i:B)"
+          ;
+        explicit "$(i:B)" ;
+        .tests += "$(i:B)" ;
+      }
+
+      for local i in [ path.glob "$(.here)" : *_compile_fail.cpp ] {
+        if ! "$(i)" in [ feature.values <jamming-source-impl> ] {
+          feature.extend <jamming-source-impl> : "$(i)" ;
+        }
+
+        compile-fail "$(i)"
+          : $(INTRO_COMPILE_PROPERTIES)
+            <jamming-source-impl>"$(i)"
+            <conditional>@"$(.top-mod).compile-requirements-conditional"
+          : "$(i:B)"
+          ;
+        explicit "$(i:B)" ;
+        .tests += "$(i:B)" ;
+      }
+
+      for local i in [ path.glob "$(.here)" : *_link.cpp ] {
+        if ! "$(i)" in [ feature.values <jamming-source-impl> ] {
+          feature.extend <jamming-source-impl> : "$(i)" ;
+        }
+
+        obj "$(i:B).obj"
+          : "$(i)"
+          : $(INTRO_COMPILE_PROPERTIES)
+            <jamming-source-impl>"$(i)"
+            <conditional>@$(.top-mod).compile-requirements-conditional
+          : # No default-build.
+          : <conditional>@$(.top-mod).compile-usage-requirements-conditional
+          ;
+        explicit "$(i:B).obj" ;
+
+        link "$(i:B).obj"
+          : $(INTRO_LINK_PROPERTIES)
+          : "$(i:B)"
+          ;
+        explicit "$(i:B)" ;
+        .tests += "$(i:B)" ;
+      }
+
+      for local i in [ path.glob "$(.here)" : *_link_fail.cpp ] {
+        if ! "$(i)" in [ feature.values <jamming-source-impl> ] {
+          feature.extend <jamming-source-impl> : "$(i)" ;
+        }
+
+        obj "$(i:B).obj"
+          : "$(i)"
+          : $(INTRO_COMPILE_PROPERTIES)
+            <jamming-source-impl>"$(i)"
+            <conditional>@$(.top-mod).compile-requirements-conditional
+          : # No default-build.
+          : <conditional>@$(.top-mod).compile-usage-requirements-conditional
+          ;
+
+        link-fail "$(i:B).obj"
+          : $(INTRO_LINK_PROPERTIES)
+          : "$(i:B)"
+          ;
+        explicit "$(i:B)" ;
+        .tests += "$(i:B)" ;
+      }
+
+      for local i in [ path.glob "$(.here)" : *_run.cpp ] {
+        if ! "$(i)" in [ feature.values <jamming-source-impl> ] {
+          feature.extend <jamming-source-impl> : "$(i)" ;
+        }
+
+        obj "$(i:B).obj"
+          : "$(i)"
+          : $(INTRO_COMPILE_PROPERTIES)
+            <jamming-source-impl>"$(i)"
+            <conditional>@$(.top-mod).compile-requirements-conditional
+          : # No default-build.
+          : <conditional>@$(.top-mod).compile-usage-requirements-conditional
+          ;
+        explicit "$(i:B).obj" ;
+
+        exe "$(i:B).exe"
+          : "$(i:B).obj"
+          : $(INTRO_LINK_PROPERTIES)
+          ;
+        explicit "$(i:B).exe" ;
+
+        run "$(i:B).exe"
+          : # arguments
+            #--catch_system_errors=no
+          : # input files
+          : $(INTRO_RUN_PROPERTIES)
+            <catchsegv>on:<testing.arg>--catch_system_errors=no
+          : "$(i:B)"
+          ;
+        explicit "$(i:B)" ;
+        .tests += "$(i:B)" ;
+      }
+
+      for local i in [ path.glob "$(.here)" : *_run_fail.cpp ] {
+        if ! "$(i)" in [ feature.values <jamming-source-impl> ] {
+          feature.extend <jamming-source-impl> : "$(i)" ;
+        }
+
+        obj "$(i:B).obj"
+          : "$(i)"
+          : $(INTRO_COMPILE_PROPERTIES)
+            <jamming-source-impl>"$(i)"
+            <conditional>@$(.top-mod).compile-requirements-conditional
+          : # No default-build.
+          : <conditional>@$(.top-mod).compile-usage-requirements-conditional
+          ;
+        explicit "$(i:B).obj" ;
+
+        exe "$(i:B).exe"
+          : "$(i:B).obj"
+          : $(INTRO_LINK_PROPERTIES)
+          ;
+        explicit "$(i:B).exe" ;
+
+        run-fail "$(i:B).exe"
+          : # arguments
+            #--catch_system_errors=no
+          : # input files
+          : $(INTRO_RUN_PROPERTIES)
+            <catchsegv>on:<testing.arg>--catch_system_errors=no
+          : "$(i:B)"
+          ;
+        explicit "$(i:B)" ;
+        .tests += "$(i:B)" ;
+      }
+
+      alias tests
+        : "$(.direct-subdirs)//tests"
+          "$(.tests)"
+        ;
+    }
+    project.pop-current ;
+  }
+}
+
+local .direct-subdirs ;
+for local i in [ path.glob "$(.here)" : * ] {
+  local ph-native = [ path.native "$(i)" ] ;
+  if [ SHELL "test -d \"$(ph-native)\" && echo -n 'x'" ] = "x" {
+    deploy-jamfile "$(i)" ;
+    .direct-subdirs += "$(i)" ;
+  }
+}
+
+alias tests
+  : "$(.direct-subdirs)//tests"
+  ;

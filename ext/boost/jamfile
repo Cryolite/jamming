@@ -1,0 +1,86 @@
+project jamming/ext/boost ;
+
+import errors ;
+import regex ;
+
+
+for local i in headers chrono date_time exception filesystem graph
+               graph_parallel iostreams locale math_c99 math_c99f math_c99l
+               math_tr1 math_tr1f math_tr1l mpi prg_exec_monitor
+               program_options python random regex serialization signals
+               system test_exec_monitor thread timer unit_test_framework wave
+               wserialization
+{
+  alias "$(i)_compile"
+    : "/site-config//boost_$(i)_compile"
+    ;
+  alias "$(i)_libs"
+    : "/site-config//boost_$(i)_libs/<checking>off"
+    ;
+}
+
+
+rule get-boost-dependencies ( included-files * : properties * )
+{
+  local results ;
+  for local included-file in $(included-files) {
+    if [ regex.match "(/boost/)" : "$(included-file)" : 1 ] {
+      if ! "headers" in $(results) {
+        results += "headers" ;
+      }
+    }
+    for local i in chrono date_time
+                   #exception
+                   filesystem graph iostreams
+                   locale mpi python random regex signals system thread
+                   timer wave
+    {
+      if [ regex.match "(/boost/$(i)/)" : "$(included-file)" : 1 ] {
+        if ! "$(i)" in $(results) {
+          results += "$(i)" ;
+        }
+      }
+    }
+    if [ regex.match "(/boost/graph/distributed/)" : "$(included-file)" : 1 ] {
+      if ! "graph_parallel" in $(results) {
+        results += "graph_parallel" ;
+      }
+    }
+    if [ regex.match "(/boost/graph/parallel/)" : "$(included-file)" : 1 ] {
+      if ! "graph_parallel" in $(results) {
+        results += "graph_parallel" ;
+      }
+    }
+    if [ regex.match "(/boost/math/tr1\\.hpp)$" : "$(included-file)" : 1 ] {
+      for local i in math_c99 math_c99f math_c99l math_tr1 math_tr1f math_tr1l {
+        if ! "$(i)" in $(results) {
+          results += "$(i)" ;
+        }
+      }
+    }
+    if [ regex.match "(/boost/test/prg_exec_monitor\\.hpp)$" : "$(included-file)" : 1 ] {
+      if ! "prg_exec_monitor" in $(results) {
+        results += "prg_exec_monitor" ;
+      }
+    }
+    if [ regex.match "(/boost/serialization/)" : "$(included-file)" : 1 ] {
+      if ! "serialization" in $(results) {
+        results += "serialization" ;
+      }
+      if ! "wserialization" in $(results) {
+        results += "wserialization" ;
+      }
+    }
+    if [ regex.match "(/boost/test/execution_monitor\\.hpp)$" : "$(included-file)" : 1 ] {
+      if ! "test_exec_monitor" in $(results) {
+        results += "test_exec_monitor" ;
+      }
+    }
+    if [ regex.match "(/boost/test/)" : "$(included-file)" : 1 ] {
+      if ! "unit_test_framework" in $(results) {
+        results += "unit_test_framework" ;
+      }
+    }
+  }
+  return $(results) ;
+}

@@ -1,0 +1,176 @@
+import errors ;
+import feature ;
+import path ;
+import regex ;
+import site-config
+  : get-compiler-path
+  ;
+
+
+rule get-cxxflags ( properties * )
+{
+  local flags ;
+
+  local toolset = [ feature.get-values <toolset> : $(properties) ] ;
+
+  local variant = [ feature.get-values <variant> : $(properties) ] ;
+  if "$(variant)" = "release" {
+    flags += "-DNDEBUG" ;
+  }
+
+  local link = [ feature.get-values <link> : $(properties) ] ;
+  switch "$(link)" {
+  case "shared" :
+    flags += "-fPIC" ;
+  case "static" :
+  case "*" :
+    errors.error "an internal error." ;
+  }
+
+  local runtime-link = [ feature.get-values <runtime-link> : $(properties) ] ;
+  switch "$(runtime-link)" {
+  case "shared" :
+  case "static" :
+    flags += "-static-libstdc++" ;
+  case "*" :
+    errors.error "an internal error." ;
+  }
+
+  local runtime-debugging = [ feature.get-values <runtime-debugging> : $(properties) ] ;
+
+  local optimization = [ feature.get-values <optimization> : $(properties) ] ;
+  switch "$(optimization)" {
+  case "off" :
+    flags += "-O0" ;
+  case "speed" :
+    flags += "-O3" ;
+  case "space" :
+    flags += "-Os" ;
+  case "*" :
+    errors.error "an internal error." ;
+  }
+
+  local profiling = [ feature.get-values <profiling> : $(properties) ] ;
+  switch "$(profiling)" {
+  case "off" :
+  case "on" :
+    switch "$(toolset)" {
+    case "gcc" :
+      flags += "-pg" ;
+    case "clang" :
+      flags += "-pg" ;
+    case "icc" :
+      flags += "-p" ;
+    case "*" :
+      errors.error "an internal error." ;
+    }
+  case "*" :
+    errors.error "an internal error." ;
+  }
+
+  local inlining = [ feature.get-values <inlining> : $(properties) ] ;
+  switch "$(inlining)" {
+  case "off" :
+    flags += "-fno-inline" ;
+  case "on" :
+    flags += "-Wno-inline" ;
+  case "full" :
+    flags += "-finline-functions" ;
+    flags += "-Wno-inline" ;
+  case "*" :
+    errors.error "an internal error." ;
+  }
+
+  local threading = [ feature.get-values <threading> : $(properties) ] ;
+  switch "$(threading)" {
+  case "single" :
+    flags += "-DJAMMING_SINGLE_THREADING" ;
+  case "multi" :
+    flags += "-DJAMMING_MULTI_THREADING" ;
+  case "*" :
+    errors.error "an internal error." ;
+  }
+
+  local rtti = [ feature.get-values <rtti> : $(properties) ] ;
+  switch "$(rtti)" {
+  case "on" :
+  case "off" :
+    flags += "-fno-rtti" ;
+  case "*" :
+    errors.error "an internal error." ;
+  }
+
+  local exception-handling = [ feature.get-values <exception-handling> : $(properties) ] ;
+  switch "$(exception-handling)" {
+  case "on" :
+  case "off" :
+    flags += "-fno-exceptions" ;
+  case "*" :
+    errors.error "an internal error." ;
+  }
+
+  local define = [ feature.get-values <define> : $(properties) ] ;
+  for local i in $(define) {
+    flags += "-D$(i)" ;
+  }
+
+  local undef = [ feature.get-values <undef> : $(properties) ] ;
+  for local i in $(undef) {
+    flags += "-U$(i)" ;
+  }
+
+  local includes = [ feature.get-values <include> : $(properties) ] ;
+  for local i in $(includes) {
+    flags += "-I$(i)" ;
+  }
+
+  local cflags = [ feature.get-values <cflags> : $(properties) ] ;
+  for local i in $(cflags) {
+    flags += "$(i)" ;
+  }
+
+  local cxxflags = [ feature.get-values <cxxflags> : $(properties) ] ;
+  for local i in $(cxxflags) {
+    flags += "$(i)" ;
+  }
+
+  return $(flags) ;
+}
+
+rule get-included-files ( properties * : include-dirs * )
+{
+  local src = [ feature.get-values <jamming-source-impl> : $(properties) ] ;
+  if ! "$(src[1])" {
+    errors.error "an internal error." ;
+  }
+  if "$(src[2])" {
+    errors.error "an internal error." ;
+  }
+  src = "$(src[1])" ;
+  if ! [ path.exists "$(src)" ] {
+    errors.error "an internal error." ;
+  }
+  local compiler-path = [ get-compiler-path $(properties) ] ;
+  local compiler-path-native = [ path.native "$(compiler-path)" ] ;
+  local cxxflags = [ get-cxxflags $(properties) ] ;
+  for local i in $(include-dirs) {
+    local include-path-native = [ path.native "$(i)" ] ;
+    cxxflags += "-I '$(include-path-native)'" ;
+  }
+  local path-native = [ path.native "$(src)" ] ;
+  local outputs = [ SHELL "'$(compiler-path-native)' -M -I /cl/work/ai-a/local/x86_64-unknown-linux-gnu/boost/latest $(cxxflags:J= ) '$(path-native)' 2> /dev/null || { echo -n 'error'; exit 1; } \\
+                             | sed -e 's/\\\\//' \\
+                             | tr --delete '\\n' \\
+                             | tr --squeeze-repeats ' '" ] ;
+  if "$(outputs)" = "error" {
+    ECHO "'$(compiler-path-native)' -M -I /cl/work/ai-a/local/x86_64-unknown-linux-gnu/boost/latest $(cxxflags:J= ) '$(path-native)'" ;
+    SHELL "'$(compiler-path-native)' -M -I /cl/work/ai-a/local/x86_64-unknown-linux-gnu/boost/latest $(cxxflags:J= ) '$(path-native)'" ;
+    errors.user-error "`$(src)': header files not found." ;
+  }
+  outputs = [ regex.split "$(outputs)" " " ] ;
+  local results ;
+  for local i in $(outputs[3-]) {
+    results += [ path.make "$(i)" ] ;
+  }
+  return $(results) ;
+}

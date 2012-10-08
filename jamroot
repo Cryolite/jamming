@@ -1,0 +1,45 @@
+path-constant JAMMING_ROOT : . ;
+
+import errors ;
+import feature ;
+import site-config ;
+
+
+feature.feature checking
+  : off on
+  : propagated composite
+  ;
+feature.compose <checking>on
+  : <define>JAMMING_CHECKING
+  ;
+
+feature.feature jamming-source-impl : : incidental ;
+
+
+project jamming
+  : requirements
+    <include>.
+    <warnings>all
+    <threading>single:<define>JAMMING_SINGLE_THREADING
+    <threading>multi:<define>JAMMING_MULTI_THREADING
+    <hardcode-dll-paths>true
+    <linkflags>"-Wl,--no-allow-shlib-undefined"
+  : default-build
+    <variant>debug
+    <link>shared
+    <runtime-link>shared
+    <threading>multi
+    <std>c++11
+    <libstdc++-debug-mode>on
+    <memcheck>on
+    <checking>on
+  : build-dir bin
+  ;
+
+use-project /jamming/ext/boost : ext/boost ;
+use-project /jamming/src : src ;
+
+alias check
+  : test//tests
+  ;
+explicit check ;
