@@ -69,7 +69,7 @@ rule deploy-jamfile ( dir )
         ;
 
       local .direct-subdirs ;
-      for local i in [ path.glob "$(.here)" : * ] {
+      for local i in [ path.glob "$(.here)" : "*" ] {
         local ph-native = [ path.native "$(i)" ] ;
         if [ SHELL "test -d \"$(ph-native)\" && echo -n 'x'" ] = "x" {
           deploy-jamfile "$(i)" ;
@@ -81,7 +81,7 @@ rule deploy-jamfile ( dir )
 
       local .tests ;
 
-      for local i in [ path.glob "$(.here)" : *_compile.cpp ] {
+      for local i in [ path.glob "$(.here)" : "*_compile.cpp" ] {
         if ! "$(i)" in [ feature.values <jamming-source-impl> ] {
           feature.extend <jamming-source-impl> : "$(i)" ;
         }
@@ -96,7 +96,7 @@ rule deploy-jamfile ( dir )
         .tests += "$(i:B)" ;
       }
 
-      for local i in [ path.glob "$(.here)" : *_compile_fail.cpp ] {
+      for local i in [ path.glob "$(.here)" : "*_compile_fail.cpp" ] {
         if ! "$(i)" in [ feature.values <jamming-source-impl> ] {
           feature.extend <jamming-source-impl> : "$(i)" ;
         }
@@ -111,7 +111,7 @@ rule deploy-jamfile ( dir )
         .tests += "$(i:B)" ;
       }
 
-      for local i in [ path.glob "$(.here)" : *_link.cpp ] {
+      for local i in [ path.glob "$(.here)" : "*_link.cpp" ] {
         if ! "$(i)" in [ feature.values <jamming-source-impl> ] {
           feature.extend <jamming-source-impl> : "$(i)" ;
         }
@@ -134,7 +134,7 @@ rule deploy-jamfile ( dir )
         .tests += "$(i:B)" ;
       }
 
-      for local i in [ path.glob "$(.here)" : *_link_fail.cpp ] {
+      for local i in [ path.glob "$(.here)" : "*_link_fail.cpp" ] {
         if ! "$(i)" in [ feature.values <jamming-source-impl> ] {
           feature.extend <jamming-source-impl> : "$(i)" ;
         }
@@ -147,6 +147,7 @@ rule deploy-jamfile ( dir )
           : # No default-build.
           : <conditional>@$(.top-mod).compile-usage-requirements-conditional
           ;
+        explicit "$(i:B).obj" ;
 
         link-fail "$(i:B).obj"
           : $(INTRO_LINK_PROPERTIES)
@@ -156,7 +157,7 @@ rule deploy-jamfile ( dir )
         .tests += "$(i:B)" ;
       }
 
-      for local i in [ path.glob "$(.here)" : *_run.cpp ] {
+      for local i in [ path.glob "$(.here)" : "*_run.cpp" ] {
         if ! "$(i)" in [ feature.values <jamming-source-impl> ] {
           feature.extend <jamming-source-impl> : "$(i)" ;
         }
@@ -189,7 +190,7 @@ rule deploy-jamfile ( dir )
         .tests += "$(i:B)" ;
       }
 
-      for local i in [ path.glob "$(.here)" : *_run_fail.cpp ] {
+      for local i in [ path.glob "$(.here)" : "*_run_fail.cpp" ] {
         if ! "$(i)" in [ feature.values <jamming-source-impl> ] {
           feature.extend <jamming-source-impl> : "$(i)" ;
         }
@@ -226,13 +227,14 @@ rule deploy-jamfile ( dir )
         : "$(.direct-subdirs)//tests"
           "$(.tests)"
         ;
+      explicit tests ;
     }
     project.pop-current ;
   }
 }
 
 local .direct-subdirs ;
-for local i in [ path.glob "$(.here)" : * ] {
+for local i in [ path.glob "$(.here)" : "*" ] {
   local ph-native = [ path.native "$(i)" ] ;
   if [ SHELL "test -d \"$(ph-native)\" && echo -n 'x'" ] = "x" {
     deploy-jamfile "$(i)" ;
@@ -243,3 +245,4 @@ for local i in [ path.glob "$(.here)" : * ] {
 alias tests
   : "$(.direct-subdirs)//tests"
   ;
+explicit tests ;

@@ -134,6 +134,11 @@ rule get-cxxflags ( properties * )
     flags += "$(i)" ;
   }
 
+  local checking = [ feature.get-values <checking> : $(properties) ] ;
+  if "$(checking)" = "on" {
+    flags += "-DJAMMING_CHECKING" ;
+  }
+
   return $(flags) ;
 }
 
@@ -158,19 +163,24 @@ rule get-included-files ( properties * : include-dirs * )
     cxxflags += "-I '$(include-path-native)'" ;
   }
   local path-native = [ path.native "$(src)" ] ;
-  local outputs = [ SHELL "'$(compiler-path-native)' -M -I /cl/work/ai-a/local/x86_64-unknown-linux-gnu/boost/latest $(cxxflags:J= ) '$(path-native)' 2> /dev/null || { echo -n 'error'; exit 1; } \\
-                             | sed -e 's/\\\\//' \\
-                             | tr --delete '\\n' \\
-                             | tr --squeeze-repeats ' '" ] ;
+  local outputs = [ SHELL "{ '$(compiler-path-native)' -M -I /cl/work/ai-a/local/x86_64-unknown-linux-gnu/boost/latest $(cxxflags:J= ) '$(path-native)' 2> /dev/null || { echo -n 'error'; exit 1; }; } \\
+                             | sed -e 's/ \\///' \\
+                             | sed -e 's/^ //' \\
+                             | tr ' ' '\\n' \\
+                             | grep -E '(^|/)((boost)|(jamming))/.*\\.(h|i)pp' \\
+                             | tr '\\n' ' '" ] ;
   if "$(outputs)" = "error" {
     ECHO "'$(compiler-path-native)' -M -I /cl/work/ai-a/local/x86_64-unknown-linux-gnu/boost/latest $(cxxflags:J= ) '$(path-native)'" ;
     SHELL "'$(compiler-path-native)' -M -I /cl/work/ai-a/local/x86_64-unknown-linux-gnu/boost/latest $(cxxflags:J= ) '$(path-native)'" ;
     errors.user-error "`$(src)': header files not found." ;
   }
+  outputs = [ regex.replace "$(outputs)" " $" "" ] ;
   outputs = [ regex.split "$(outputs)" " " ] ;
   local results ;
-  for local i in $(outputs[3-]) {
-    results += [ path.make "$(i)" ] ;
+  if "$(outputs)" {
+    for local i in "$(outputs)" {
+      results += [ path.make "$(i)" ] ;
+    }
   }
   return $(results) ;
 }

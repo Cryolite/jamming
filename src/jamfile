@@ -14,7 +14,7 @@ import "$(JAMMING_ROOT)/common"
   ;
 
 
-local .here = [ regex.match "Jamfile<(.*)>" : "$(__name__)" : 1 ] ;
+local .here = [ regex.match "Jamfile<(.*)>" : "$(__name__)" : "1" ] ;
 if ! "$(.here)" {
   errors.error "an internal error." ;
 }
@@ -22,7 +22,7 @@ if ! "$(.here)" {
 
 {
   local src-top-siblings ;
-  for local i in [ path.glob "$(.here)" : * ] {
+  for local i in [ path.glob "$(.here)" : "*" ] {
     local path-native = [ path.native "$(i)" ] ;
     if [ SHELL "test -d \"$(path-native)\" && echo -n 'x'" ] = "x" {
       src-top-siblings += [ path.basename "$(i)" ] ;
@@ -38,7 +38,7 @@ rule get-src-dependencies ( included-files * : properties * : excluded-sibling-t
   local results ;
   for local included-file in $(included-files) {
     for local i in $(JAMMING_SRC_TOP_SIBLINGS) {
-      if [ regex.match "(jamming/$(i)/)" : "$(included-file)" : 1 ] {
+      if [ regex.match "((^|/)jamming/$(i)/)" : "$(included-file)" : "1" ] {
         if "$(i)" != "$(excluded-sibling-top)" {
           results += "$(i)" ;
         }
@@ -62,7 +62,7 @@ rule obj-requirements-conditional ( properties * )
   if ! [ path.exists "$(src)" ] {
     errors.error "an internal error." ;
   }
-  local sibling-top = [ regex.match "/jamming/src/([^/]+)/" : "$(src)" : 1 ] ;
+  local sibling-top = [ regex.match "/jamming/src/([^/]+)/" : "$(src)" : "1" ] ;
   if ! "$(sibling-top)" {
     errors.error "an internal error." ;
   }
@@ -88,7 +88,7 @@ rule obj-usage-requirements-conditional ( properties * )
   if ! [ path.exists "$(src)" ] {
     errors.error "an internal error." ;
   }
-  local sibling-top = [ regex.match "/jamming/src/([^/]+)/" : "$(src)" : 1 ] ;
+  local sibling-top = [ regex.match "/jamming/src/([^/]+)/" : "$(src)" : "1" ] ;
   if ! "$(sibling-top)" {
     errors.error "an internal error." ;
   }
@@ -126,7 +126,7 @@ rule deploy-jamfile ( dir )
         ;
 
       local .direct-subdirs ;
-      for local i in [ path.glob "$(.here)" : * ] {
+      for local i in [ path.glob "$(.here)" : "*" ] {
         local path-native = [ path.native "$(i)" ] ;
         if [ SHELL "test -d \"$(path-native)\" && echo -n 'x'" ] = "x" {
           deploy-jamfile "$(i)" ;
@@ -141,7 +141,7 @@ rule deploy-jamfile ( dir )
         ;
 
       local .top-mod = [ project.module-name "$(JAMMING_ROOT)/src" ] ;
-      local .srcs = [ path.glob "$(.here)" : *.cpp ] ;
+      local .srcs = [ path.glob "$(.here)" : "*.cpp" ] ;
       local .objs ;
       for local i in $(.srcs) {
         if ! "$(i)" in [ feature.values <jamming-source-impl> ] {

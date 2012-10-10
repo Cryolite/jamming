@@ -31,7 +31,8 @@ project jamming
     <threading>multi
     <std>c++11
     <libstdc++-debug-mode>on
-    <memcheck>on
+    <memcheck>off
+    <catchsegv>on
     <checking>on
   : build-dir bin
   ;
